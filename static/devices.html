@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>إدارة الأجهزة — محاكاة الطاقة الذكية</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        background: #f1f3f5;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+      }
+      .container {
+        max-width: 880px;
+        margin-top: 25px;
+      }
+      .card {
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+      }
+      #alert-container {
+        margin-bottom: 14px;
+      }
+      /* محاذاة وسط لكل خلايا الجدول */
+      table tr th,
+      table tr td {
+        text-align: center;
+        vertical-align: middle;
+      }
+      /* ضبط حجم نافذة الحالة */
+      .modal-sm-custom .modal-dialog {
+        max-width: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 shadow-sm">
+      <div class="container-fluid justify-content-center">
+        <a class="navbar-brand fw-bold" href="/">محاكاة الطاقة الذكية</a>
+      </div>
+    </nav>
+
+    <div class="container">
+      <div id="alert-container"></div>
+      <h2 class="text-center text-primary mb-4">🔧 لوحة إدارة الأجهزة</h2>
+
+      <!-- ========== ADD HOUSE / ADD DEVICE CARDS ========== -->
+      <div class="row gy-4">
+        <!-- ADD HOUSE -->
+        <div class="col-lg-4">
+          <div class="card h-100 text-center">
+            <div class="card-header bg-dark text-white">🏠 إضافة منزل جديد</div>
+            <div class="card-body">
+              <form id="add-house-form">
+                <input
+                  type="number"
+                  id="new_house_id"
+                  class="form-control mb-2 text-center"
+                  placeholder="House ID"
+                  required
+                />
+                <div class="d-grid">
+                  <button class="btn btn-dark">➕ إضافة منزل</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADD DEVICE -->
+        <div class="col-lg-8">
+          <div class="card h-100 text-center">
+            <div class="card-header bg-success text-white">
+              ➕ إضافة جهاز جديد
+            </div>
+            <div class="card-body">
+              <form id="add-device-form">
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <input
+                      name="name"
+                      class="form-control text-center"
+                      placeholder="اسم الجهاز"
+                      required
+                    />
+                  </div>
+                  <div class="col-md-2">
+                    <select
+                      id="house_select_add"
+                      class="form-select text-center"
+                      required
+                    >
+                      <option value="">House ID</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <select
+                      name="appliance"
+                      class="form-select text-center"
+                      required
+                    >
+                      <option value="">القناة</option>
+                      <option>Appliance1</option>
+                      <option>Appliance2</option>
+                      <option>Appliance3</option>
+                      <option>Appliance4</option>
+                      <option>Appliance5</option>
+                      <option>Appliance6</option>
+                      <option>Appliance7</option>
+                      <option>Appliance8</option>
+                      <option>Appliance9</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <input
+                      name="email"
+                      class="form-control text-center"
+                      placeholder="Email (اختياري)"
+                    />
+                  </div>
+                </div>
+                <div
+                  class="form-check form-switch mt-2 d-inline-flex gap-1 justify-content-center"
+                >
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="rec_sw"
+                    checked
+                  />
+                  <label class="form-check-label" for="rec_sw">التنبيهات</label>
+                </div>
+                <div
+                  class="form-check form-switch mt-2 d-inline-flex gap-1 justify-content-center"
+                >
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="auto_sw"
+                  />
+                  <label class="form-check-label" for="auto_sw"
+                    >الإيقاف التلقائي</label
+                  >
+                </div>
+                <div class="d-grid mt-3">
+                  <button class="btn btn-success">✔️ إضافة</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /row -->
+
+      <!-- ========== DEVICES TABLE ========== -->
+      <div class="card mt-4">
+        <div
+          class="card-header bg-info text-white d-flex align-items-center justify-content-between"
+        >
+          <span>📋 الأجهزة المسجلة</span>
+          <select id="filter_house" class="form-select form-select-sm w-auto">
+            <option value="">كل المنازل</option>
+          </select>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-striped mb-0" id="devices-table">
+              <thead class="table-light">
+                <tr>
+                  <th>الاسم</th>
+                  <th>House</th>
+                  <th>القناة</th>
+                  <th>Email</th>
+                  <th>تنبيهات</th>
+                  <th>إيقاف</th>
+                  <th>الحالة</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /container -->
+
+    <!-- EDIT MODAL (unchanged except centred text) -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center">
+          <div class="modal-header">
+            <h5 class="modal-title w-100">✏️ تعديل جهاز</h5>
+            <button class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="edit-device-form">
+              <input type="hidden" name="id" />
+              <div class="mb-2">
+                <label class="form-label">الاسم</label
+                ><input name="name" class="form-control text-center" required />
+              </div>
+              <div class="mb-2">
+                <label class="form-label">House ID</label>
+                <select
+                  id="house_select_edit"
+                  name="house_id"
+                  class="form-select text-center"
+                  required
+                ></select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">القناة</label>
+                <select
+                  name="appliance"
+                  class="form-select text-center"
+                  required
+                >
+                  <option>Appliance1</option>
+                  <option>Appliance2</option>
+                  <option>Appliance3</option>
+                  <option>Appliance4</option>
+                  <option>Appliance5</option>
+                  <option>Appliance6</option>
+                  <option>Appliance7</option>
+                  <option>Appliance8</option>
+                  <option>Appliance9</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Email</label
+                ><input
+                  name="email"
+                  type="email"
+                  class="form-control text-center"
+                />
+              </div>
+              <div class="d-flex justify-content-center gap-4">
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="recommend_only"
+                    id="edit_rec"
+                  /><label class="form-check-label" for="edit_rec"
+                    >التنبيهات</label
+                  >
+                </div>
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="auto_off"
+                    id="edit_off"
+                  /><label class="form-check-label" for="edit_off"
+                    >الإيقاف التلقائي</label
+                  >
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">
+              إغلاق</button
+            ><button class="btn btn-primary" id="save-edit-btn">حفظ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATUS MODAL (smaller) -->
+    <div class="modal fade modal-sm-custom" id="statusModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center">
+          <div class="modal-header">
+            <h5 class="modal-title w-100">⚡ حالة الجهاز</h5>
+            <button class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-2">
+            <table class="table table-sm mb-0">
+              <tbody id="status_tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====  JS (unchanged logic)  ===== -->
+    <script>
+      const baseURL = "";
+      let devicesCache = [],
+        alertBox = document.getElementById("alert-container"),
+        tblBody = document.querySelector("#devices-table tbody"),
+        filterSel = document.getElementById("filter_house"),
+        houseSelAdd = document.getElementById("house_select_add"),
+        houseSelEdit = document.getElementById("house_select_edit");
+      let editModal, statusModal;
+      function showAlert(m, t = "success") {
+        alertBox.innerHTML = `<div class="alert alert-${t} d-flex align-items-center mb-0">
+    <div class="flex-grow-1 w-100 text-center">${m}</div><button type="button" class="btn-close" onclick="this.parentElement.remove()"></button></div>`;
+        setTimeout(() => (alertBox.innerHTML = ""), 3500);
+      }
+      async function refreshData() {
+        const r = await fetch(`${baseURL}/devices`);
+        if (!r.ok) {
+          showAlert("خطأ فى الاتصال", "danger");
+          return;
+        }
+        devicesCache = await r.json();
+        populateLists();
+        renderTable();
+      }
+      function populateLists() {
+        const houses = [...new Set(devicesCache.map((d) => d.house_id))].sort(
+            (a, b) => a - b
+          ),
+          opt = (h) => `<option value="${h}">House ${h}</option>`;
+        filterSel.innerHTML =
+          '<option value="">كل المنازل</option>' + houses.map(opt).join("");
+        houseSelAdd.innerHTML =
+          '<option value="">House ID</option>' + houses.map(opt).join("");
+        houseSelEdit.innerHTML = houses.map(opt).join("");
+      }
+      function renderTable() {
+        const hid = filterSel.value ? +filterSel.value : null;
+        tblBody.innerHTML = "";
+        devicesCache
+          .filter((d) => !hid || d.house_id === hid)
+          .forEach((d) => {
+            tblBody.insertAdjacentHTML(
+              "beforeend",
+              `
+      <tr><td>${d.name}</td><td>${d.house_id}</td><td>${d.appliance}</td><td>${
+                d.email ?? ""
+              }</td>
+      <td>${d.recommend_only ? "✔️" : "❌"}</td><td>${
+                d.auto_off ? "✔️" : "❌"
+              }</td>
+      <td id="stat-${d.id}">…</td>
+      <td>
+        <button class="btn btn-sm btn-info me-1" onclick="openStatus('${
+          d.id
+        }')">⚡</button>
+        <button class="btn btn-sm btn-primary me-1" onclick="openEdit('${
+          d.id
+        }')">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteDevice('${
+          d.id
+        }')">🗑️</button>
+      </td></tr>`
+            );
+            fetchStatus(d);
+          });
+      }
+      async function fetchStatus(d) {
+        try {
+          const r = await fetch(
+            `${baseURL}/houses/${d.house_id}/devices/${d.id}/status`
+          );
+          if (!r.ok) return;
+          const js = await r.json(),
+            cell = document.getElementById(`stat-${d.id}`);
+          cell.innerHTML =
+            js.status === "ON"
+              ? '<span class="badge bg-success">ON</span>'
+              : '<span class="badge bg-secondary">OFF</span>';
+          cell.title = `${js.watts} W @ ${js.timestamp.replace("T", " ")}`;
+        } catch {}
+      }
+      // add house
+      document
+        .getElementById("add-house-form")
+        .addEventListener("submit", (e) => {
+          e.preventDefault();
+          const h = +new_house_id.value;
+          if (!h) return showAlert("أدخل رقم منزل صالح", "danger");
+          if ([...filterSel.options].some((o) => +o.value === h))
+            return showAlert("المنزل موجود", "warning");
+          [filterSel, houseSelAdd, houseSelEdit].forEach((sel) =>
+            sel.insertAdjacentHTML(
+              "beforeend",
+              `<option value="${h}">House ${h}</option>`
+            )
+          );
+          showAlert("✅ أُضيف المنزل");
+          e.target.reset();
+        });
+      // add device
+      document
+        .getElementById("add-device-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          if (!house_select_add.value)
+            return showAlert("اختر House ID", "danger");
+          const f = e.target,
+            data = {
+              name: f.name.value,
+              house_id: +house_select_add.value,
+              appliance: f.appliance.value,
+              email: f.email.value || null,
+              recommend_only: rec_sw.checked,
+              auto_off: auto_sw.checked,
+            };
+          const r = await fetch(`${baseURL}/devices`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!r.ok) {
+            showAlert("❌ " + JSON.stringify(await r.json()), "danger");
+            return;
+          }
+          showAlert("✅ تم إضافة الجهاز");
+          f.reset();
+          refreshData();
+        });
+      // delete
+      async function deleteDevice(id) {
+        if (!confirm("تأكيد الحذف؟")) return;
+        const r = await fetch(`${baseURL}/devices/${id}`, { method: "DELETE" });
+        if (!r.ok) {
+          showAlert("❌ فشل الحذف", "danger");
+          return;
+        }
+        showAlert("✅ تم الحذف");
+        refreshData();
+      }
+      // edit
+      function openEdit(id) {
+        const d = devicesCache.find((x) => x.id === id);
+        if (!d) return;
+        const f = document.getElementById("edit-device-form");
+        f.id.value = d.id;
+        f.name.value = d.name;
+        house_select_edit.value = d.house_id;
+        f.appliance.value = d.appliance;
+        f.email.value = d.email ?? "";
+        f.recommend_only.checked = d.recommend_only;
+        f.auto_off.checked = d.auto_off;
+        (editModal ??= new bootstrap.Modal(
+          document.getElementById("editModal")
+        )).show();
+      }
+      document
+        .getElementById("save-edit-btn")
+        .addEventListener("click", async () => {
+          const f = document.getElementById("edit-device-form"),
+            data = {
+              name: f.name.value,
+              house_id: +house_select_edit.value,
+              appliance: f.appliance.value,
+              email: f.email.value || null,
+              recommend_only: f.recommend_only.checked,
+              auto_off: f.auto_off.checked,
+            };
+          const r = await fetch(`${baseURL}/devices/${f.id.value}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!r.ok) {
+            showAlert("❌ " + JSON.stringify(await r.json()), "danger");
+            return;
+          }
+          showAlert("✅ تم الحفظ");
+          editModal.hide();
+          refreshData();
+        });
+      // status modal
+      function renderStatusModal(js) {
+        status_tbody.innerHTML = `<tr><th>Device</th><td dir="ltr">${
+          js.device_id
+        }</td></tr>
+      <tr><th>House</th><td>${js.house_id}</td></tr>
+      <tr><th>وقت القراءة</th><td dir="ltr">${js.timestamp.replace(
+        "T",
+        "  "
+      )}</td></tr>
+      <tr><th>Watts</th><td>${js.watts}</td></tr>
+      <tr><th>Status</th><td>${
+        js.status === "ON"
+          ? '<span class="badge bg-success">ON</span>'
+          : '<span class="badge bg-secondary">OFF</span>'
+      }</td></tr>`;
+        (statusModal ??= new bootstrap.Modal(
+          document.getElementById("statusModal")
+        )).show();
+      }
+      async function openStatus(id) {
+        const d = devicesCache.find((x) => x.id === id);
+        if (!d) return;
+        try {
+          const r = await fetch(
+            `${baseURL}/houses/${d.house_id}/devices/${d.id}/status`
+          );
+          if (!r.ok) throw 0;
+          renderStatusModal(await r.json());
+        } catch {
+          showAlert("❌ تعذّر جلب الحالة", "danger");
+        }
+      }
+      // events
+      filter_house.addEventListener("change", renderTable);
+      document.addEventListener("DOMContentLoaded", refreshData);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>محاكاة الطاقة الذكية</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background: #f1f3f5;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+      }
+      .container {
+        max-width: 960px;
+        margin-top: 30px;
+      }
+      .card {
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+      }
+      pre {
+        max-height: 250px;
+        overflow: auto;
+      }
+      #alert-container {
+        margin-bottom: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ==== Navbar ==== -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 shadow-sm">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/">محاكاة الطاقة الذكية</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navBar"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navBar">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="/manager">الإدارة</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container">
+      <div id="alert-container"></div>
+
+      <h2 class="text-center text-primary mb-4">
+        🔋 واجهة محاكاة الطاقة الذكية
+      </h2>
+
+      <!-- ========= بطاقتا الإضافة ========= -->
+      <div class="row gy-4">
+        <!-- إضافة منزل -->
+        <div class="col-lg-4">
+          <div class="card h-100">
+            <div class="card-header bg-dark text-white">🏠 إضافة منزل جديد</div>
+            <div class="card-body">
+              <form id="add-house-form">
+                <input
+                  type="number"
+                  class="form-control mb-2"
+                  id="new_house_id"
+                  placeholder="House ID"
+                  required
+                />
+                <div class="d-grid">
+                  <button class="btn btn-dark">➕ إضافة منزل</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- إضافة جهاز -->
+        <div class="col-lg-8">
+          <div class="card h-100">
+            <div class="card-header bg-success text-white">
+              ➕ إضافة جهاز جديد
+            </div>
+            <div class="card-body">
+              <form id="add-device-form">
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <input
+                      class="form-control"
+                      name="name"
+                      placeholder="اسم الجهاز"
+                      required
+                    />
+                  </div>
+                  <div class="col-md-2">
+                    <select id="house_select_add" class="form-select" required>
+                      <option value="">House ID</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <select class="form-select" name="appliance" required>
+                      <option value="">القناة</option>
+                      <option>Appliance1</option>
+                      <option>Appliance2</option>
+                      <option>Appliance3</option>
+                      <option>Appliance4</option>
+                      <option>Appliance5</option>
+                      <option>Appliance6</option>
+                      <option>Appliance7</option>
+                      <option>Appliance8</option>
+                      <option>Appliance9</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <input
+                      class="form-control"
+                      name="email"
+                      placeholder="Email (اختياري)"
+                    />
+                  </div>
+                </div>
+                <div class="form-check form-switch mt-2">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="rec_sw"
+                    checked
+                  />
+                  <label class="form-check-label" for="rec_sw">التنبيهات</label>
+                </div>
+                <div class="form-check form-switch mt-2">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="auto_sw"
+                  />
+                  <label class="form-check-label" for="auto_sw"
+                    >الإيقاف التلقائي</label
+                  >
+                </div>
+                <div class="d-grid mt-3">
+                  <button class="btn btn-success">✔️ إضافة</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /row -->
+
+      <!-- ========= إرسال قراءة لقناة ========= -->
+      <div class="card mt-4">
+        <div class="card-header bg-primary text-white">
+          📊 إرسال قراءة لقناة واحدة
+        </div>
+        <div class="card-body">
+          <form id="reading-form">
+            <div class="row gy-3">
+              <div class="col-md-3">
+                <select id="house_select" class="form-select" required>
+                  <option value="">المنازل…</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select
+                  id="device_select"
+                  class="form-select"
+                  disabled
+                  required
+                >
+                  <option value="">الأجهزة…</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <input
+                  id="channel_input"
+                  class="form-control"
+                  placeholder="القناة"
+                  readonly
+                />
+              </div>
+              <div class="col-md-2">
+                <input
+                  type="number"
+                  id="value_input"
+                  class="form-control"
+                  placeholder="W"
+                  required
+                />
+              </div>
+              <div class="col-md-2">
+                <input
+                  id="aggregate_input"
+                  class="form-control"
+                  placeholder="الطاقة الكلية"
+                  readonly
+                />
+              </div>
+            </div>
+            <div class="row mt-3">
+              <div class="col-md-4 offset-md-8">
+                <input
+                  type="datetime-local"
+                  id="ts_input"
+                  class="form-control"
+                  required
+                />
+              </div>
+            </div>
+            <div class="d-flex justify-content-between mt-3">
+              <button
+                type="button"
+                id="generate-value-btn"
+                class="btn btn-warning"
+              >
+                🎲 عشوائي
+              </button>
+              <button class="btn btn-primary">📤 إرسال القراءة</button>
+            </div>
+          </form>
+        </div>
+        <div class="card-footer bg-light">
+          <pre id="reading-result" class="border p-2 rounded"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Script ========== -->
+    <script>
+      const baseURL = "";
+      let devicesCache = [];
+
+      const houseSelMain = document.getElementById("house_select");
+      const houseSelAdd = document.getElementById("house_select_add");
+      const devSel = document.getElementById("device_select");
+      const chInput = document.getElementById("channel_input");
+      const alertBox = document.getElementById("alert-container");
+
+      /* تنبيه داخلى */
+      function showAlert(msg, type = "success") {
+        alertBox.innerHTML = `<div class="alert alert-${type} d-flex align-items-center mb-0">
+      <div class="flex-grow-1">${msg}</div>
+      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    </div>`;
+        setTimeout(() => (alertBox.innerHTML = ""), 4000);
+      }
+
+      /* تحميل الأجهزة + ملء قوائم المنازل */
+      async function refreshAll() {
+        const r = await fetch(`${baseURL}/devices`);
+        if (!r.ok) {
+          showAlert("خطأ فى الاتصال", "danger");
+          return;
+        }
+        devicesCache = await r.json();
+        const houses = [...new Set(devicesCache.map((d) => d.house_id))].sort(
+          (a, b) => a - b
+        );
+        const opts = (h) => `<option value="${h}">House ${h}</option>`;
+        houseSelMain.innerHTML =
+          '<option value="">المنازل…</option>' + houses.map(opts).join("");
+        houseSelAdd.innerHTML =
+          '<option value="">House ID</option>' + houses.map(opts).join("");
+        devSel.innerHTML = '<option value="">الأجهزة…</option>';
+        chInput.value = "";
+        devSel.disabled = true;
+      }
+
+      /* ==== إضافة منزل ==== */
+      document
+        .getElementById("add-house-form")
+        .addEventListener("submit", (e) => {
+          e.preventDefault();
+          const h = +document.getElementById("new_house_id").value;
+          if (!h) {
+            showAlert("أدخل رقم منزل صالح", "danger");
+            return;
+          }
+          // يكفى إضافته للقائمة محلياً (لا يوجد endpoint مستقل)
+          const exists = [...houseSelMain.options].some((o) => +o.value === h);
+          if (exists) {
+            showAlert("المنزل موجود مسبقاً", "warning");
+            return;
+          }
+          const opt = `<option value="${h}">House ${h}</option>`;
+          houseSelMain.insertAdjacentHTML("beforeend", opt);
+          houseSelAdd.insertAdjacentHTML("beforeend", opt);
+          showAlert("✅ أُضيف المنزل");
+          e.target.reset();
+        });
+
+      /* ==== إضافة جهاز ==== */
+      document
+        .getElementById("add-device-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const f = e.target;
+          if (!houseSelAdd.value)
+            return showAlert("اختر House ID للجهاز", "danger");
+          const data = {
+            name: f.name.value,
+            house_id: +houseSelAdd.value,
+            appliance: f.appliance.value,
+            email: f.email.value || null,
+            recommend_only: document.getElementById("rec_sw").checked,
+            auto_off: document.getElementById("auto_sw").checked,
+          };
+          const r = await fetch(`${baseURL}/devices`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!r.ok) {
+            showAlert("❌ " + JSON.stringify(await r.json()), "danger");
+            return;
+          }
+          showAlert("✅ تم إضافة الجهاز");
+          f.reset();
+          refreshAll();
+        });
+
+      /* عند اختيار منزل فى نموذج القراءة */
+      houseSelMain.addEventListener("change", (e) => {
+        const hid = +e.target.value;
+        devSel.innerHTML = '<option value="">الأجهزة…</option>';
+        chInput.value = "";
+        devSel.disabled = true;
+        if (!hid) return;
+        devicesCache
+          .filter((d) => d.house_id === hid)
+          .forEach((d) => {
+            devSel.insertAdjacentHTML(
+              "beforeend",
+              `<option value="${d.id}" data-channel="${d.appliance}">${
+                d.name
+              } (${d.id.slice(0, 8)}…)</option>`
+            );
+          });
+        devSel.disabled = false;
+      });
+
+      /* إظهار القناة عند اختيار جهاز */
+      devSel.addEventListener("change", (e) => {
+        chInput.value = e.target.selectedOptions[0]?.dataset.channel || "";
+      });
+
+      /* حساب aggregate */
+      document.getElementById("value_input").addEventListener("input", (e) => {
+        document.getElementById("aggregate_input").value = e.target.value || 0;
+      });
+
+      /* توليد عشوائى */
+      document
+        .getElementById("generate-value-btn")
+        .addEventListener("click", () => {
+          const v = Math.floor(Math.random() * 501);
+          document.getElementById("value_input").value = v;
+          document.getElementById("aggregate_input").value = v;
+          document.getElementById("ts_input").value = new Date()
+            .toISOString()
+            .slice(0, 16);
+        });
+
+      /* إرسال القراءة */
+      document
+        .getElementById("reading-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const houseId = houseSelMain.value,
+            devId = devSel.value,
+            channel = chInput.value;
+          if (!houseId || !devId || !channel)
+            return showAlert("اختر المنزل والجهاز", "danger");
+          const val = parseFloat(document.getElementById("value_input").value);
+          const ts = document.getElementById("ts_input").value;
+          const body = {
+            timestamp: new Date(ts).toISOString(),
+            aggregate: val,
+            appliances: { [channel]: val },
+            device_id: devId,
+          };
+          const r = await fetch(`${baseURL}/houses/${houseId}/reading`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!r.ok) {
+            showAlert("❌ " + JSON.stringify(await r.json()), "danger");
+            return;
+          }
+          document.getElementById("reading-result").textContent =
+            JSON.stringify(await r.json(), null, 2);
+          showAlert("✅ تم الإرسال");
+        });
+
+      /* بداية التحميل */
+      document.addEventListener("DOMContentLoaded", refreshAll);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
