@@ -1,39 +1,51 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
+    <!-- Meta tags and responsive settings -->
     <meta charset="UTF-8" />
     <title>محاكاة الطاقة الذكية</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Bootstrap RTL CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css"
       rel="stylesheet"
     />
+
     <style>
+      /* Page background and font */
       body {
         background: #f1f3f5;
         font-family: "Segoe UI", Tahoma, sans-serif;
       }
+      /* Main container sizing */
       .container {
         max-width: 960px;
         margin-top: 30px;
       }
+      /* Card shadow */
       .card {
         box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
       }
+      /* Preformatted text scroll */
       pre {
         max-height: 250px;
         overflow: auto;
       }
+      /* Alert spacing */
       #alert-container {
         margin-bottom: 15px;
       }
     </style>
   </head>
+
   <body>
-    <!-- ==== Navbar ==== -->
+    <!-- Navbar with brand, manager link and logout -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 shadow-sm">
       <div class="container-fluid">
+        <!-- Brand -->
         <a class="navbar-brand fw-bold" href="/">محاكاة الطاقة الذكية</a>
+        <!-- Toggler for mobile -->
         <button
           class="navbar-toggler"
           type="button"
@@ -42,26 +54,34 @@
         >
           <span class="navbar-toggler-icon"></span>
         </button>
+
         <div class="collapse navbar-collapse" id="navBar">
+          <!-- Manager link -->
           <ul class="navbar-nav me-auto">
             <li class="nav-item">
               <a class="nav-link" href="/manager">الإدارة</a>
             </li>
           </ul>
+          <!-- Logout button -->
+          <button id="logout-btn" class="btn btn-outline-danger">
+            تسجيل خروج
+          </button>
         </div>
       </div>
     </nav>
 
     <div class="container">
+      <!-- Alert container -->
       <div id="alert-container"></div>
 
+      <!-- Page heading -->
       <h2 class="text-center text-primary mb-4">
         🔋 واجهة محاكاة الطاقة الذكية
       </h2>
 
-      <!-- ========= بطاقتا الإضافة ========= -->
+      <!-- === Add House and Add Device Cards === -->
       <div class="row gy-4">
-        <!-- إضافة منزل -->
+        <!-- Add House Card -->
         <div class="col-lg-4">
           <div class="card h-100">
             <div class="card-header bg-dark text-white">🏠 إضافة منزل جديد</div>
@@ -82,7 +102,7 @@
           </div>
         </div>
 
-        <!-- إضافة جهاز -->
+        <!-- Add Device Card -->
         <div class="col-lg-8">
           <div class="card h-100">
             <div class="card-header bg-success text-white">
@@ -153,9 +173,8 @@
           </div>
         </div>
       </div>
-      <!-- /row -->
 
-      <!-- ========= إرسال قراءة لقناة ========= -->
+      <!-- === Single-Channel Reading Card === -->
       <div class="card mt-4">
         <div class="card-header bg-primary text-white">
           📊 إرسال قراءة لقناة واحدة
@@ -232,34 +251,63 @@
       </div>
     </div>
 
-    <!-- ========== Script ========== -->
-    <script>
-      const baseURL = "";
-      let devicesCache = [];
+    <!-- Bootstrap JS bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+    <script>
+      // Base API URL – adjust as needed
+      const baseURL = "";
+      // Retrieve JWT token from localStorage
+      const token = localStorage.getItem("jwt");
+
+      // Redirect to login if no token found
+      if (!token) {
+        window.location.href = "/static/login.html";
+      }
+
+      // Logout button handler: clear token and redirect to login
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        localStorage.removeItem("jwt");
+        window.location.href = "/static/login.html";
+      });
+
+      // Centralized fetch function that adds Authorization header
+      async function apiFetch(path, options = {}) {
+        options.headers = options.headers || {};
+        options.headers["Content-Type"] =
+          options.headers["Content-Type"] || "application/json";
+        options.headers["Authorization"] = `Bearer ${token}`;
+        return fetch(baseURL + path, options);
+      }
+
+      // Show alert message in alert container
+      function showAlert(msg, type = "success") {
+        const alertBox = document.getElementById("alert-container");
+        alertBox.innerHTML = `<div class="alert alert-${type} d-flex align-items-center mb-0">
+          <div class="flex-grow-1">${msg}</div>
+          <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        </div>`;
+        setTimeout(() => (alertBox.innerHTML = ""), 4000);
+      }
+
+      let devicesCache = [];
       const houseSelMain = document.getElementById("house_select");
       const houseSelAdd = document.getElementById("house_select_add");
       const devSel = document.getElementById("device_select");
       const chInput = document.getElementById("channel_input");
-      const alertBox = document.getElementById("alert-container");
 
-      /* تنبيه داخلى */
-      function showAlert(msg, type = "success") {
-        alertBox.innerHTML = `<div class="alert alert-${type} d-flex align-items-center mb-0">
-      <div class="flex-grow-1">${msg}</div>
-      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
-    </div>`;
-        setTimeout(() => (alertBox.innerHTML = ""), 4000);
-      }
-
-      /* تحميل الأجهزة + ملء قوائم المنازل */
+      // Fetch devices and populate house & device selectors
       async function refreshAll() {
-        const r = await fetch(`${baseURL}/devices`);
-        if (!r.ok) {
+        const res = await apiFetch("/devices");
+        if (!res.ok) {
           showAlert("خطأ فى الاتصال", "danger");
+          // If unauthorized, redirect to login
+          if (res.status === 401)
+            localStorage.removeItem("jwt") &&
+              window.location.replace("/static/login.html");
           return;
         }
-        devicesCache = await r.json();
+        devicesCache = await res.json();
         const houses = [...new Set(devicesCache.map((d) => d.house_id))].sort(
           (a, b) => a - b
         );
@@ -269,26 +317,19 @@
         houseSelAdd.innerHTML =
           '<option value="">House ID</option>' + houses.map(opts).join("");
         devSel.innerHTML = '<option value="">الأجهزة…</option>';
-        chInput.value = "";
         devSel.disabled = true;
+        chInput.value = "";
       }
 
-      /* ==== إضافة منزل ==== */
+      // Handle adding a new house locally
       document
         .getElementById("add-house-form")
         .addEventListener("submit", (e) => {
           e.preventDefault();
           const h = +document.getElementById("new_house_id").value;
-          if (!h) {
-            showAlert("أدخل رقم منزل صالح", "danger");
-            return;
-          }
-          // يكفى إضافته للقائمة محلياً (لا يوجد endpoint مستقل)
+          if (!h) return showAlert("أدخل رقم منزل صالح", "danger");
           const exists = [...houseSelMain.options].some((o) => +o.value === h);
-          if (exists) {
-            showAlert("المنزل موجود مسبقاً", "warning");
-            return;
-          }
+          if (exists) return showAlert("المنزل موجود مسبقاً", "warning");
           const opt = `<option value="${h}">House ${h}</option>`;
           houseSelMain.insertAdjacentHTML("beforeend", opt);
           houseSelAdd.insertAdjacentHTML("beforeend", opt);
@@ -296,14 +337,14 @@
           e.target.reset();
         });
 
-      /* ==== إضافة جهاز ==== */
+      // Handle adding a new device via API
       document
         .getElementById("add-device-form")
         .addEventListener("submit", async (e) => {
           e.preventDefault();
-          const f = e.target;
           if (!houseSelAdd.value)
             return showAlert("اختر House ID للجهاز", "danger");
+          const f = e.target;
           const data = {
             name: f.name.value,
             house_id: +houseSelAdd.value,
@@ -312,13 +353,12 @@
             recommend_only: document.getElementById("rec_sw").checked,
             auto_off: document.getElementById("auto_sw").checked,
           };
-          const r = await fetch(`${baseURL}/devices`, {
+          const res = await apiFetch("/devices", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
           });
-          if (!r.ok) {
-            showAlert("❌ " + JSON.stringify(await r.json()), "danger");
+          if (!res.ok) {
+            showAlert("❌ " + JSON.stringify(await res.json()), "danger");
             return;
           }
           showAlert("✅ تم إضافة الجهاز");
@@ -326,7 +366,7 @@
           refreshAll();
         });
 
-      /* عند اختيار منزل فى نموذج القراءة */
+      // Update device selector when house changes
       houseSelMain.addEventListener("change", (e) => {
         const hid = +e.target.value;
         devSel.innerHTML = '<option value="">الأجهزة…</option>';
@@ -346,17 +386,17 @@
         devSel.disabled = false;
       });
 
-      /* إظهار القناة عند اختيار جهاز */
+      // Show channel when device selected
       devSel.addEventListener("change", (e) => {
         chInput.value = e.target.selectedOptions[0]?.dataset.channel || "";
       });
 
-      /* حساب aggregate */
+      // Compute aggregate same as value
       document.getElementById("value_input").addEventListener("input", (e) => {
         document.getElementById("aggregate_input").value = e.target.value || 0;
       });
 
-      /* توليد عشوائى */
+      // Generate random reading value and timestamp
       document
         .getElementById("generate-value-btn")
         .addEventListener("click", () => {
@@ -368,7 +408,7 @@
             .slice(0, 16);
         });
 
-      /* إرسال القراءة */
+      // Submit reading via API
       document
         .getElementById("reading-form")
         .addEventListener("submit", async (e) => {
@@ -386,23 +426,21 @@
             appliances: { [channel]: val },
             device_id: devId,
           };
-          const r = await fetch(`${baseURL}/houses/${houseId}/reading`, {
+          const res = await apiFetch(`/houses/${houseId}/reading`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           });
-          if (!r.ok) {
-            showAlert("❌ " + JSON.stringify(await r.json()), "danger");
+          if (!res.ok) {
+            showAlert("❌ " + JSON.stringify(await res.json()), "danger");
             return;
           }
           document.getElementById("reading-result").textContent =
-            JSON.stringify(await r.json(), null, 2);
+            JSON.stringify(await res.json(), null, 2);
           showAlert("✅ تم الإرسال");
         });
 
-      /* بداية التحميل */
+      // Initialize on page load
       document.addEventListener("DOMContentLoaded", refreshAll);
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>

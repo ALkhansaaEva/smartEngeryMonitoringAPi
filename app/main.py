@@ -4,10 +4,10 @@ from typing import List
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from sqlalchemy import create_engine
@@ -304,13 +304,30 @@ def stats(
     return {"id": id, **s}
 
 # ---- Serve SPA & Static ----
+def check_jwt_in_request(request: Request):
+    token = request.cookies.get("access_token") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    if not token:
+        return False
+    try:
+        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return True
+    except JWTError:
+        return False
 
-# @app.get("/", response_class=FileResponse)
-# async def serve_index():
-#     return "static/index.html"
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    if not check_jwt_in_request(request):
+        return RedirectResponse("/static/login.html")
+    return FileResponse("static/index.html")
 
-# @app.get("/manager", response_class=FileResponse)
-# async def serve_manager():
-#     return "static/devices.html"
+@app.get("/manager", response_class=HTMLResponse)
+async def manager(request: Request):
+    if not check_jwt_in_request(request):
+        return RedirectResponse("/static/login.html")
+    return FileResponse("static/devices.html")
+
+@app.get("/login", response_class=FileResponse)
+async def login_page():
+    return FileResponse("static/login.html")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

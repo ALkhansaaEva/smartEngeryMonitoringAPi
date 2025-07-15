@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:9.3.0-oracle
+    container_name: mysql_energy_ai
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword123
+      MYSQL_DATABASE: energy
+      MYSQL_USER: energy_user
+      MYSQL_PASSWORD: energy_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

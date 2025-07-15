@@ -1,51 +1,64 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
+    <!-- Meta tags and viewport settings -->
     <meta charset="UTF-8" />
     <title>إدارة الأجهزة — محاكاة الطاقة الذكية</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Bootstrap RTL CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css"
       rel="stylesheet"
     />
 
     <style>
+      /* Page background and default font */
       body {
         background: #f1f3f5;
         font-family: "Segoe UI", Tahoma, sans-serif;
       }
+      /* Container max width */
       .container {
         max-width: 880px;
         margin-top: 25px;
       }
+      /* Card box shadow */
       .card {
         box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
       }
+      /* Alert container bottom margin */
       #alert-container {
         margin-bottom: 14px;
       }
-      /* محاذاة وسط لكل خلايا الجدول */
+      /* Center table text */
       table tr th,
       table tr td {
         text-align: center;
         vertical-align: middle;
       }
-      /* ضبط حجم نافذة الحالة */
+      /* Custom small modal width */
       .modal-sm-custom .modal-dialog {
         max-width: 400px;
       }
     </style>
   </head>
   <body>
-    <!-- NAVBAR -->
+    <!-- NAVBAR: brand and logout button -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 shadow-sm">
       <div class="container-fluid justify-content-center">
+        <!-- Brand name -->
         <a class="navbar-brand fw-bold" href="/">محاكاة الطاقة الذكية</a>
+        <!-- Logout button -->
+        <button id="logout-btn" class="btn btn-outline-danger">
+          تسجيل خروج
+        </button>
       </div>
     </nav>
 
     <div class="container">
+      <!-- Alert messages -->
       <div id="alert-container"></div>
+      <!-- Page heading -->
       <h2 class="text-center text-primary mb-4">🔧 لوحة إدارة الأجهزة</h2>
 
       <!-- ========== ADD HOUSE / ADD DEVICE CARDS ========== -->
@@ -189,7 +202,7 @@
     </div>
     <!-- /container -->
 
-    <!-- EDIT MODAL (unchanged except centred text) -->
+    <!-- EDIT MODAL -->
     <div class="modal fade" id="editModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content text-center">
@@ -272,7 +285,7 @@
       </div>
     </div>
 
-    <!-- STATUS MODAL (smaller) -->
+    <!-- STATUS MODAL -->
     <div class="modal fade modal-sm-custom" id="statusModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content text-center">
@@ -289,9 +302,42 @@
       </div>
     </div>
 
-    <!-- =====  JS (unchanged logic)  ===== -->
+    <!-- Bootstrap JS bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
+      // Base API URL – adjust as needed
       const baseURL = "";
+
+      // Retrieve JWT token from localStorage
+      const token = localStorage.getItem("jwt");
+      // Redirect to login if no token found
+      if (!token) {
+        window.location.replace("/static/login.html");
+      }
+
+      // Logout button handler: clear token and redirect to login
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        localStorage.removeItem("jwt");
+        window.location.replace("/static/login.html");
+      });
+
+      // Centralized fetch function that adds Authorization header
+      async function apiFetch(path, options = {}) {
+        options.headers = options.headers || {};
+        options.headers["Content-Type"] =
+          options.headers["Content-Type"] || "application/json";
+        options.headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch(baseURL + path, options);
+        if (res.status === 401) {
+          // Unauthorized: clear token and redirect
+          localStorage.removeItem("jwt");
+          window.location.replace("/static/login.html");
+          throw new Error("Unauthorized");
+        }
+        return res;
+      }
+
       let devicesCache = [],
         alertBox = document.getElementById("alert-container"),
         tblBody = document.querySelector("#devices-table tbody"),
@@ -299,21 +345,27 @@
         houseSelAdd = document.getElementById("house_select_add"),
         houseSelEdit = document.getElementById("house_select_edit");
       let editModal, statusModal;
+
+      // Show alert message in alert container
       function showAlert(m, t = "success") {
         alertBox.innerHTML = `<div class="alert alert-${t} d-flex align-items-center mb-0">
-    <div class="flex-grow-1 w-100 text-center">${m}</div><button type="button" class="btn-close" onclick="this.parentElement.remove()"></button></div>`;
+          <div class="flex-grow-1 w-100 text-center">${m}</div>
+          <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        </div>`;
         setTimeout(() => (alertBox.innerHTML = ""), 3500);
       }
+
+      // Fetch all devices and refresh UI
       async function refreshData() {
-        const r = await fetch(`${baseURL}/devices`);
-        if (!r.ok) {
-          showAlert("خطأ فى الاتصال", "danger");
-          return;
-        }
-        devicesCache = await r.json();
-        populateLists();
-        renderTable();
+        try {
+          const r = await apiFetch("/devices");
+          devicesCache = await r.json();
+          populateLists();
+          renderTable();
+        } catch {}
       }
+
+      // Populate house selection lists
       function populateLists() {
         const houses = [...new Set(devicesCache.map((d) => d.house_id))].sort(
             (a, b) => a - b
@@ -325,6 +377,8 @@
           '<option value="">House ID</option>' + houses.map(opt).join("");
         houseSelEdit.innerHTML = houses.map(opt).join("");
       }
+
+      // Render devices table
       function renderTable() {
         const hid = filterSel.value ? +filterSel.value : null;
         tblBody.innerHTML = "";
@@ -333,37 +387,39 @@
           .forEach((d) => {
             tblBody.insertAdjacentHTML(
               "beforeend",
-              `
-      <tr><td>${d.name}</td><td>${d.house_id}</td><td>${d.appliance}</td><td>${
-                d.email ?? ""
-              }</td>
-      <td>${d.recommend_only ? "✔️" : "❌"}</td><td>${
-                d.auto_off ? "✔️" : "❌"
-              }</td>
-      <td id="stat-${d.id}">…</td>
-      <td>
-        <button class="btn btn-sm btn-info me-1" onclick="openStatus('${
-          d.id
-        }')">⚡</button>
-        <button class="btn btn-sm btn-primary me-1" onclick="openEdit('${
-          d.id
-        }')">✏️</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteDevice('${
-          d.id
-        }')">🗑️</button>
-      </td></tr>`
+              `<tr>
+                <td>${d.name}</td>
+                <td>${d.house_id}</td>
+                <td>${d.appliance}</td>
+                <td>${d.email ?? ""}</td>
+                <td>${d.recommend_only ? "✔️" : "❌"}</td>
+                <td>${d.auto_off ? "✔️" : "❌"}</td>
+                <td id="stat-${d.id}">…</td>
+                <td>
+                  <button class="btn btn-sm btn-info me-1" onclick="openStatus('${
+                    d.id
+                  }')">⚡</button>
+                  <button class="btn btn-sm btn-primary me-1" onclick="openEdit('${
+                    d.id
+                  }')">✏️</button>
+                  <button class="btn btn-sm btn-danger" onclick="deleteDevice('${
+                    d.id
+                  }')">🗑️</button>
+                </td>
+              </tr>`
             );
             fetchStatus(d);
           });
       }
+
+      // Fetch and display status badge
       async function fetchStatus(d) {
         try {
-          const r = await fetch(
-            `${baseURL}/houses/${d.house_id}/devices/${d.id}/status`
+          const r = await apiFetch(
+            `/houses/${d.house_id}/devices/${d.id}/status`
           );
-          if (!r.ok) return;
-          const js = await r.json(),
-            cell = document.getElementById(`stat-${d.id}`);
+          const js = await r.json();
+          const cell = document.getElementById(`stat-${d.id}`);
           cell.innerHTML =
             js.status === "ON"
               ? '<span class="badge bg-success">ON</span>'
@@ -371,7 +427,8 @@
           cell.title = `${js.watts} W @ ${js.timestamp.replace("T", " ")}`;
         } catch {}
       }
-      // add house
+
+      // ADD HOUSE handler
       document
         .getElementById("add-house-form")
         .addEventListener("submit", (e) => {
@@ -389,7 +446,8 @@
           showAlert("✅ أُضيف المنزل");
           e.target.reset();
         });
-      // add device
+
+      // ADD DEVICE handler
       document
         .getElementById("add-device-form")
         .addEventListener("submit", async (e) => {
@@ -405,9 +463,8 @@
               recommend_only: rec_sw.checked,
               auto_off: auto_sw.checked,
             };
-          const r = await fetch(`${baseURL}/devices`, {
+          const r = await apiFetch("/devices", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
           });
           if (!r.ok) {
@@ -418,10 +475,11 @@
           f.reset();
           refreshData();
         });
-      // delete
+
+      // DELETE DEVICE handler
       async function deleteDevice(id) {
         if (!confirm("تأكيد الحذف؟")) return;
-        const r = await fetch(`${baseURL}/devices/${id}`, { method: "DELETE" });
+        const r = await apiFetch(`/devices/${id}`, { method: "DELETE" });
         if (!r.ok) {
           showAlert("❌ فشل الحذف", "danger");
           return;
@@ -429,7 +487,8 @@
         showAlert("✅ تم الحذف");
         refreshData();
       }
-      // edit
+
+      // OPEN EDIT MODAL
       function openEdit(id) {
         const d = devicesCache.find((x) => x.id === id);
         if (!d) return;
@@ -445,6 +504,8 @@
           document.getElementById("editModal")
         )).show();
       }
+
+      // SAVE EDITED DEVICE
       document
         .getElementById("save-edit-btn")
         .addEventListener("click", async () => {
@@ -457,9 +518,8 @@
               recommend_only: f.recommend_only.checked,
               auto_off: f.auto_off.checked,
             };
-          const r = await fetch(`${baseURL}/devices/${f.id.value}`, {
+          const r = await apiFetch(`/devices/${f.id.value}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
           });
           if (!r.ok) {
@@ -470,43 +530,46 @@
           editModal.hide();
           refreshData();
         });
-      // status modal
+
+      // RENDER STATUS MODAL CONTENT
       function renderStatusModal(js) {
-        status_tbody.innerHTML = `<tr><th>Device</th><td dir="ltr">${
-          js.device_id
-        }</td></tr>
-      <tr><th>House</th><td>${js.house_id}</td></tr>
-      <tr><th>وقت القراءة</th><td dir="ltr">${js.timestamp.replace(
-        "T",
-        "  "
-      )}</td></tr>
-      <tr><th>Watts</th><td>${js.watts}</td></tr>
-      <tr><th>Status</th><td>${
-        js.status === "ON"
-          ? '<span class="badge bg-success">ON</span>'
-          : '<span class="badge bg-secondary">OFF</span>'
-      }</td></tr>`;
+        status_tbody.innerHTML = `
+          <tr><th>Device</th><td dir="ltr">${js.device_id}</td></tr>
+          <tr><th>House</th><td>${js.house_id}</td></tr>
+          <tr><th>وقت القراءة</th><td dir="ltr">${js.timestamp.replace(
+            "T",
+            "  "
+          )}</td></tr>
+          <tr><th>Watts</th><td>${js.watts}</td></tr>
+          <tr><th>Status</th><td>${
+            js.status === "ON"
+              ? '<span class="badge bg-success">ON</span>'
+              : '<span class="badge bg-secondary">OFF</span>'
+          }</td></tr>
+        `;
         (statusModal ??= new bootstrap.Modal(
           document.getElementById("statusModal")
         )).show();
       }
+
+      // OPEN STATUS MODAL
       async function openStatus(id) {
         const d = devicesCache.find((x) => x.id === id);
         if (!d) return;
         try {
-          const r = await fetch(
-            `${baseURL}/houses/${d.house_id}/devices/${d.id}/status`
+          const r = await apiFetch(
+            `/houses/${d.house_id}/devices/${d.id}/status`
           );
-          if (!r.ok) throw 0;
           renderStatusModal(await r.json());
         } catch {
           showAlert("❌ تعذّر جلب الحالة", "danger");
         }
       }
-      // events
+
+      // Filter devices when house filter changes
       filter_house.addEventListener("change", renderTable);
+      // Initialize on page load
       document.addEventListener("DOMContentLoaded", refreshData);
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>
