@@ -1,19 +1,19 @@
 version: "3.8"
 
 services:
-  # mysql:
-  #   image: mysql:9.3.0-oracle
-  #   container_name: mysql_energy_ai
-  #   restart: always
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: rootpassword123
-  #     MYSQL_DATABASE: energy
-  #     MYSQL_USER: energy_user
-  #     MYSQL_PASSWORD: energy_pass
-  #   ports:
-  #     - "3306:3306"
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
+  mysql:
+    image: mysql:9.3.0-oracle
+    container_name: mysql_energy_ai
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword123
+      MYSQL_DATABASE: energy
+      MYSQL_USER: energy_user
+      MYSQL_PASSWORD: energy_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
 
   api:
     build:
@@ -21,8 +21,8 @@ services:
       dockerfile: Dockerfile
     container_name: fastapi_energy_ai
     restart: always
-    # depends_on:
-    #   - mysql
+    depends_on:
+      - mysql
     env_file:
       - .env
     ports:
@@ -32,5 +32,5 @@ services:
       - ./app:/app/app # Mount source code
       - ./static:/app/static # Mount static HTML files
 
-# volumes:
-#   mysql_data:
+volumes:
+  mysql_data:
