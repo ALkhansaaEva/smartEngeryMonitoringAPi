@@ -28,9 +28,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./models:/app/models
-      - ./app:/app/app
-      - ./static:/app/static
+      - ./models:/app/models # Mount ML models
+      - ./app:/app/app # Mount source code
+      - ./static:/app/static # Mount static HTML files
 
 volumes:
   mysql_data:
