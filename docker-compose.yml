@@ -32,5 +32,5 @@ services:
       - ./app:/app/app # Mount source code
       - ./static:/app/static # Mount static HTML files
 
-volumes:
-  mysql_data:
+# volumes:
+#   mysql_data:
