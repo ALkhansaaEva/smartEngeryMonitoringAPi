@@ -1,13 +1,12 @@
 import os
 from datetime import datetime, timedelta
-from fastapi import Path, Body
 from typing import List, Dict
 
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import (
     FastAPI, HTTPException, Depends,
-    BackgroundTasks, Request,
+    BackgroundTasks, Request, Path, Body
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import (
@@ -317,10 +316,11 @@ def ingest_bulk_readings(
 
 @app.post("/houses/{house_id}/reading/{device_id}", response_model=schemas.ActionOut)
 def ingest_single_reading(
+    background_tasks: BackgroundTasks,
     house_id: int = Path(..., description="ID of the house"),
     device_id: str = Path(..., description="UUID of the device"),
     reading: schemas.ReadingIn = Body(...),
-    background_tasks: BackgroundTasks = Depends(),
+
     db: Session = Depends(get_db)
 ):
     """
