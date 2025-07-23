@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from pathlib import Path
+from fastapi import Path
 from typing import List, Dict
 
 import pandas as pd
