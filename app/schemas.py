@@ -1,6 +1,7 @@
 from enum import Enum
 from uuid import UUID
 from datetime import datetime, time
+from sqlalchemy import Column, Time
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
 

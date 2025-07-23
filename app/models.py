@@ -1,6 +1,6 @@
 # models.py
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Time, String, Integer, Float, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -40,9 +40,9 @@ class DeviceSchedule(Base):
 
     id                  = Column(Integer, primary_key=True, autoincrement=True)
     device_id           = Column(String(36), ForeignKey("devices.id"), nullable=False)
-    start_time          = Column(String(5), nullable=False)   # HH:MM
-    end_time            = Column(String(5), nullable=False)   # HH:MM
-    days                = Column(String(255), nullable=False) # e.g. "Mon,Tue,Wed"
+    start_time          = Column(Time, nullable=False)     
+    end_time            = Column(Time, nullable=False)    
+    days                = Column(String(255), nullable=False)
     send_email_reminder = Column(Boolean, default=False)
 
     device = relationship("Device", back_populates="schedules")

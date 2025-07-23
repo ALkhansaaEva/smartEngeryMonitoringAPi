@@ -1,311 +1,425 @@
 import os
 from datetime import datetime, timedelta
-from typing import List
+from pathlib import Path
+from typing import List, Dict
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import (
+    FastAPI, HTTPException, Depends,
+    BackgroundTasks, Request
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.security import (
+    OAuth2PasswordBearer, OAuth2PasswordRequestForm
+)
+from fastapi.responses import (
+    FileResponse, HTMLResponse, RedirectResponse
+)
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-# Local imports
+# Local application modules
 from . import models, schemas, crud, ml_model, notifications
 
-# Load environment variables
+# Load environment variables from .env
 load_dotenv()
 
-# Database setup
-engine = create_engine(os.getenv("DB_URL"), future=True)
+# -------------------------------------------------------------------
+# Database configuration
+# -------------------------------------------------------------------
+DATABASE_URL = os.getenv("DB_URL")
+engine = create_engine(DATABASE_URL, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
+
+# Create all tables (if not exist)
 models.Base.metadata.create_all(engine)
 
+# -------------------------------------------------------------------
 # JWT configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "secret")
+# -------------------------------------------------------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# Dependency: DB session
-def db_dep():
+# -------------------------------------------------------------------
+# FastAPI application setup
+# -------------------------------------------------------------------
+app = FastAPI(title="Energy-IoT API", version="1.0.0")
+
+# Allow all CORS origins (adjust in production)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -------------------------------------------------------------------
+# Dependency: provide a database session
+# -------------------------------------------------------------------
+def get_db() -> Session:
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# OAuth2 scheme
+# -------------------------------------------------------------------
+# OAuth2 password flow
+# -------------------------------------------------------------------
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# FastAPI app
-app = FastAPI(title="Energy-IoT API", version="1.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
-)
-
-# Utility: create JWT token
-def create_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(data: Dict[str, str], expires_delta: timedelta = None) -> str:
+    """Generate a signed JWT token with expiration."""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# Dependency: get current user
-def get_current_user(db: Session = Depends(db_dep), token: str = Depends(oauth2_scheme)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    """Decode JWT and retrieve the corresponding user."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid authentication token")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
     user = crud.get_user_by_email(db, email)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-# Dependency: admin-only
 def require_admin(user=Depends(get_current_user)):
+    """Ensure that the current user has an admin role."""
     if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admins only")
+        raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
 
-# ---- Auth Endpoints ----
-
+# -------------------------------------------------------------------
+# Authentication endpoints
+# -------------------------------------------------------------------
 @app.post("/token")
 def login(
-    form: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(db_dep)
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
 ):
-    user = crud.verify_user(db, form.username, form.password)
+    """Authenticate user and return a JWT token."""
+    user = crud.verify_user(db, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    token = create_token({"sub": user.email})
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    token = create_access_token({"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/users", response_model=schemas.UserOut)
 def register_user(
-    u: schemas.UserCreate,
-    db: Session = Depends(db_dep)
+    new_user: schemas.UserCreate,
+    db: Session = Depends(get_db)
 ):
-    if crud.get_user_by_email(db, u.email):
+    """Register a new user account."""
+    if crud.get_user_by_email(db, new_user.email):
         raise HTTPException(status_code=400, detail="Email already registered")
-    return crud.create_user(db, u)
+    return crud.create_user(db, new_user)
 
 @app.post("/users/change-password")
-def change_pw(
+def change_password(
     data: schemas.ChangePassword,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    ok = crud.change_user_password(db, user.id, data.old_password, data.new_password)
-    if not ok:
-        raise HTTPException(status_code=403, detail="Wrong password")
-    return {"detail": "Password changed"}
+    """Allow authenticated user to change their password."""
+    success = crud.change_user_password(db, current_user.id, data.old_password, data.new_password)
+    if not success:
+        raise HTTPException(status_code=403, detail="Old password is incorrect")
+    return {"detail": "Password successfully changed"}
 
-# ---- Protected User Endpoints ----
-
+# -------------------------------------------------------------------
+# Device management endpoints
+# -------------------------------------------------------------------
 @app.post("/devices", response_model=schemas.DeviceOut)
-def add_dev(
-    p: schemas.DeviceCreate,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+def create_device(
+    device_in: schemas.DeviceCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    """Create a new device tied to the authenticated user."""
-    return crud.create_device(db, p, user.id)
+    """Create a new IoT device for the authenticated user."""
+    return crud.create_device(db, device_in, current_user.id)
 
 @app.get("/devices", response_model=List[schemas.DeviceOut])
-def all_devs(
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+def list_devices(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    """List devices owned by the authenticated user."""
-    return crud.list_devices(db, user.id)
+    """Return all devices owned by the authenticated user."""
+    return crud.list_devices(db, current_user.id)
 
-@app.get("/devices/{id}", response_model=schemas.DeviceOut)
-def one_device(
-    id: str,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+@app.get("/devices/{device_id}", response_model=schemas.DeviceOut)
+def get_device(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    d = crud.get_device(db, id)
-    if not d or d.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="Not found")
-    return d
+    """Fetch a single device, ensuring ownership."""
+    device = crud.get_device(db, device_id)
+    if not device or device.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return device
 
-@app.put("/devices/{id}", response_model=schemas.DeviceOut)
-def update_dev(
-    id: str,
-    p: schemas.DeviceUpdate,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+@app.put("/devices/{device_id}", response_model=schemas.DeviceOut)
+def update_device(
+    device_id: str,
+    update_in: schemas.DeviceUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    d = crud.get_device(db, id)
-    if not d or d.owner_id != user.id:
+    """Update device metadata (name, settings, etc.)."""
+    device = crud.get_device(db, device_id)
+    if not device or device.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    crud.update_device(db, id, p)
-    return crud.get_device(db, id)
+    crud.update_device(db, device_id, update_in)
+    return crud.get_device(db, device_id)
 
-@app.delete("/devices/{id}")
-def delete_dev(
-    id: str,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+@app.delete("/devices/{device_id}")
+def remove_device(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    d = crud.get_device(db, id)
-    if not d or d.owner_id != user.id:
+    """Delete a device and all its readings."""
+    device = crud.get_device(db, device_id)
+    if not device or device.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    crud.delete_device(db, id)
-    return {"detail": "deleted"}
+    crud.delete_device(db, device_id)
+    return {"detail": "Device deleted"}
 
-# ---- Scheduling ----
-
+# -------------------------------------------------------------------
+# Scheduling endpoints
+# -------------------------------------------------------------------
 @app.post("/schedules", response_model=schemas.ScheduleOut)
 def add_schedule(
-    s: schemas.ScheduleCreate,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+    schedule_in: schemas.ScheduleCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    dev = crud.get_device(db, s.device_id)
-    if not dev or dev.owner_id != user.id:
+    """Add an on/off schedule for a device."""
+    device = crud.get_device(db, schedule_in.device_id)
+    if not device or device.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return crud.create_schedule(db, s)
+
+    return crud.create_schedule(db, schedule_in)
 
 @app.get("/devices/{device_id}/schedules", response_model=List[schemas.ScheduleOut])
-def list_schedules(
+def get_schedules(
     device_id: str,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    dev = crud.get_device(db, device_id)
-    if not dev or dev.owner_id != user.id:
+    """List all schedules for a specific device."""
+    device = crud.get_device(db, device_id)
+    if not device or device.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     return crud.list_schedules_for_device(db, device_id)
 
 @app.put("/schedules/{schedule_id}")
-def update_schedule(
+def edit_schedule(
     schedule_id: int,
-    s: schemas.ScheduleUpdate,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+    schedule_update: schemas.ScheduleUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    crud.update_schedule(db, schedule_id, s)
-    return {"detail": "Updated"}
+    """Modify an existing schedule."""
+    crud.update_schedule(db, schedule_id, schedule_update)
+    return {"detail": "Schedule updated"}
 
 @app.delete("/schedules/{schedule_id}")
-def delete_schedule(
+def remove_schedule(
     schedule_id: int,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
+    """Delete a schedule by its ID."""
     crud.delete_schedule(db, schedule_id)
-    return {"detail": "Deleted"}
+    return {"detail": "Schedule deleted"}
 
-# ---- Energy Summary ----
-
+# -------------------------------------------------------------------
+# Energy summary endpoint
+# -------------------------------------------------------------------
 @app.get("/devices/{device_id}/energy-summary", response_model=schemas.EnergySummary)
-def get_energy_summary(
+def energy_summary(
     device_id: str,
-    db: Session = Depends(db_dep),
-    user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
-    dev = crud.get_device(db, device_id)
-    if not dev or dev.owner_id != user.id:
+    """Return consumption totals: today, past week, past month."""
+    device = crud.get_device(db, device_id)
+    if not device or device.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     return crud.energy_summary(db, device_id)
 
-# ---- Real-time Reading & Control ----
-
+# -------------------------------------------------------------------
+# Bulk reading ingestion & action prediction
+# -------------------------------------------------------------------
 @app.post("/houses/{house_id}/reading", response_model=List[schemas.ActionOut])
-def ingest_readings(
+def ingest_bulk_readings(
     house_id: int,
-    s: schemas.BulkReading,
-    bg: BackgroundTasks,
-    db: Session = Depends(db_dep)
+    bulk: schemas.BulkReading,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
 ):
-    # Save raw readings
-    for channel, val in s.appliances.items():
+    """
+    Store readings for each appliance, run the ML model
+    to predict ON/OFF actions, then handle notifications/auto-off.
+    """
+    # Persist each channel reading
+    for channel, watt in bulk.appliances.items():
         devices = crud.by_house_appliances(db, house_id, channel)
         for d in devices:
-            crud.add_reading(db, d.id, schemas.ReadingIn(timestamp=s.timestamp, watts=val))
+            crud.add_reading(db, d.id, schemas.ReadingIn(timestamp=bulk.timestamp, watts=watt))
 
-    # Predict actions
-    actions = ml_model.predict_actions({
-        "Time": pd.to_datetime(s.timestamp),
-        "Aggregate": s.aggregate,
-        **s.appliances
-    })
+    # Prepare DataFrame for model
+    df_input = {
+        "Time": pd.to_datetime(bulk.timestamp),
+        "Aggregate": bulk.aggregate,
+        **bulk.appliances
+    }
+    actions = ml_model.predict_actions(df_input)
 
-    # Handle each device
-    resp = []
-    for channel, act in actions.items():
+    # Process predicted actions
+    response = []
+    for channel, action in actions.items():
         devices = crud.by_house_appliances(db, house_id, channel)
         for d in devices:
-            # Alerts & auto-off
+            # Send email alerts if enabled
             if d.recommend_only and d.email:
-                bg.add_task(
+                background_tasks.add_task(
                     notifications.send_email,
                     d.email,
-                    f"[Alert] {d.name} → {act}",
-                    f"{d.name} predicted {act} at {s.timestamp}"
+                    f"[Alert] {d.name} → {action}",
+                    f"{d.name} predicted to {action} at {bulk.timestamp}"
                 )
-            if d.auto_off and act == "OFF":
-                print(f"AUTO-OFF relay for {d.id}")
-            resp.append({
+            # Perform relay auto-off if configured
+            if d.auto_off and action == "OFF":
+                print(f"AUTO-OFF relay for device {d.id}")
+            response.append({
                 "device_id": d.id,
                 "name":      d.name,
                 "appliance": d.appliance,
-                "action":    act
+                "action":    action
             })
-    return resp
+    return response
 
-# ---- Device Live Status ----
+@app.post("/houses/{house_id}/reading/{device_id}", response_model=schemas.ActionOut)
+def ingest_single_reading(
+    house_id: int = Path(..., description="ID of the house"),
+    device_id: str = Path(..., description="UUID of the device"),
+    reading: schemas.ReadingIn = Depends(),
+    background_tasks: BackgroundTasks = Depends(),
+    db: Session = Depends(get_db)
+):
+    """
+    Receive a single reading for a specific device in a given house.
+    Store the reading, run the prediction model, and return the expected action.
+    """
+    # Verify that the device exists within the given house
+    device = crud.get_device(db, device_id)
+    if not device or device.house_id != house_id:
+        raise HTTPException(status_code=404, detail="Device not found in this house")
 
+    # Save the reading to the database
+    crud.add_reading(db, device_id, reading)
+
+    # Prepare input data for the prediction model (simplified example)
+    df_input = {
+        "Time": pd.to_datetime(reading.timestamp),
+        "Aggregate": reading.watts,
+        device.appliance: reading.watts
+    }
+
+    # Predict the action using the ML model
+    actions = ml_model.predict_actions(df_input)  # returns dict like {"Appliance5": "OFF"}
+
+    action = actions.get(device.appliance, "UNKNOWN")
+
+    # Send notifications or perform other actions if necessary
+    if device.recommend_only and device.email:
+        background_tasks.add_task(
+            notifications.send_email,
+            device.email,
+            f"[Alert] {device.name} → {action}",
+            f"{device.name} predicted to {action} at {reading.timestamp}"
+        )
+    if device.auto_off and action == "OFF":
+        print(f"AUTO-OFF relay for device {device_id}")
+
+    # Return the predicted action result
+    return schemas.ActionOut(
+        device_id=device_id,
+        name=device.name,
+        appliance=device.appliance,
+        action=action
+    )
+
+# -------------------------------------------------------------------
+# Live device status endpoint
+# -------------------------------------------------------------------
 @app.get(
     "/houses/{house_id}/devices/{device_id}/status",
     response_model=schemas.DeviceStatus,
-    summary="آخر حالة للجهاز (ON/OFF) داخل منزل معيّن"
+    summary="Get most recent ON/OFF status for a device"
 )
 def device_status(
     house_id: int,
     device_id: str,
-    db: Session = Depends(db_dep)
+    db: Session = Depends(get_db)
 ):
-    d = crud.get_device(db, device_id)
-    if not d or d.house_id != house_id:
+    """Fetch the latest reading and determine ON/OFF state."""
+    device = crud.get_device(db, device_id)
+    if not device or device.house_id != house_id:
         raise HTTPException(status_code=404, detail="Device not found in this house")
-    rd = crud.latest_reading(db, device_id)
-    if not rd:
+
+    latest = crud.latest_reading(db, device_id)
+    if not latest:
         return {"device_id": device_id, "house_id": house_id, "status": "UNKNOWN"}
-    status = "ON" if rd.watts >= 10 else "OFF"
+
+    status = "ON" if latest.watts >= 10 else "OFF"
     return {
         "device_id": device_id,
         "house_id":  house_id,
-        "timestamp": rd.ts,
-        "watts":     rd.watts,
+        "timestamp": latest.ts,
+        "watts":     latest.watts,
         "status":    status
     }
 
-# ---- Statistics ----
-
-@app.get("/devices/{id}/stats", response_model=schemas.DeviceStats)
-def stats(
-    id: str,
-    db: Session = Depends(db_dep)
+# -------------------------------------------------------------------
+# Historical stats endpoint
+# -------------------------------------------------------------------
+@app.get("/devices/{device_id}/stats", response_model=schemas.DeviceStats)
+def device_stats(
+    device_id: str,
+    db: Session = Depends(get_db)
 ):
-    if not crud.get_device(db, id):
-        raise HTTPException(status_code=404)
-    s = crud.stats(db, id)
-    return {"id": id, **s}
+    """Compute average watts and total readings for a device."""
+    if not crud.get_device(db, device_id):
+        raise HTTPException(status_code=404, detail="Device not found")
+    stats = crud.stats(db, device_id)
+    return {"id": device_id, **stats}
 
-# ---- Serve SPA & Static ----
-def check_jwt_in_request(request: Request):
-    token = request.cookies.get("access_token") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+# -------------------------------------------------------------------
+# Serve frontend SPA and static assets
+# -------------------------------------------------------------------
+def validate_jwt(request: Request) -> bool:
+    """Check for valid JWT in cookies or Authorization header."""
+    token = (
+        request.cookies.get("access_token") or
+        request.headers.get("Authorization", "").removeprefix("Bearer ")
+    )
     if not token:
         return False
     try:
@@ -315,19 +429,23 @@ def check_jwt_in_request(request: Request):
         return False
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    if not check_jwt_in_request(request):
+async def serve_home(request: Request):
+    """Redirect unauthenticated users to login, else serve app."""
+    if not validate_jwt(request):
         return RedirectResponse("/static/login.html")
     return FileResponse("static/index.html")
 
 @app.get("/manager", response_class=HTMLResponse)
-async def manager(request: Request):
-    if not check_jwt_in_request(request):
+async def serve_manager(request: Request):
+    """Protected manager UI for device control."""
+    if not validate_jwt(request):
         return RedirectResponse("/static/login.html")
     return FileResponse("static/devices.html")
 
 @app.get("/login", response_class=FileResponse)
-async def login_page():
+def serve_login():
+    """Serve the login page."""
     return FileResponse("static/login.html")
 
+# Mount the 'static' directory at /static
 app.mount("/static", StaticFiles(directory="static"), name="static")

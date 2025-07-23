@@ -2,6 +2,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from . import models, schemas
+from typing import List
 from passlib.hash import bcrypt
 from datetime import datetime, timedelta
 
@@ -87,32 +88,60 @@ def delete_device(db: Session, device_id: str):
 
 # -------- Device Schedules --------
 
-def create_schedule(db: Session, data: schemas.ScheduleCreate):
+def create_schedule(db: Session, data: schemas.ScheduleCreate) -> schemas.ScheduleOut:
+    """
+    Create a new schedule and return a ScheduleOut (with days as List[str]).
+    """
+    # column 'start_time' و 'end_time' مُعرّفين كـ Time في الموديل، فلا حاجة لتحويلهم إلى str
+    days_str = ",".join([d.value for d in data.days])
+
     schedule = models.DeviceSchedule(
         device_id=data.device_id,
         start_time=data.start_time,
         end_time=data.end_time,
-        days=",".join(data.days),
+        days=days_str,
         send_email_reminder=data.send_email_reminder
     )
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
-    return schedule
 
-def list_schedules_for_device(db: Session, device_id: str):
-    return db.query(models.DeviceSchedule).filter(models.DeviceSchedule.device_id == device_id).all()
+    # هنا نحوّل days_str إلى قائمة قبل الإرجاع
+    return schemas.ScheduleOut(
+        id=schedule.id,
+        device_id=schedule.device_id,
+        start_time=schedule.start_time,
+        end_time=schedule.end_time,
+        days=schedule.days.split(","),
+        send_email_reminder=schedule.send_email_reminder
+    )
+
 
 def update_schedule(db: Session, schedule_id: int, data: schemas.ScheduleUpdate):
+    days_str = ",".join([d.value for d in data.days])
     db.query(models.DeviceSchedule) \
       .filter(models.DeviceSchedule.id == schedule_id) \
       .update({
           "start_time": data.start_time,
           "end_time": data.end_time,
-          "days": ",".join(data.days),
+          "days": days_str,
           "send_email_reminder": data.send_email_reminder
       })
     db.commit()
+
+def list_schedules_for_device(db: Session, device_id: str) -> List[schemas.ScheduleOut]:
+    schedules = db.query(models.DeviceSchedule).filter(models.DeviceSchedule.device_id == device_id).all()
+    return [
+        schemas.ScheduleOut(
+            id=s.id,
+            device_id=s.device_id,
+            start_time=s.start_time,
+            end_time=s.end_time,
+            days=s.days.split(",") if s.days else [],
+            send_email_reminder=s.send_email_reminder
+        )
+        for s in schedules
+    ]
 
 def delete_schedule(db: Session, schedule_id: int):
     db.query(models.DeviceSchedule).filter(models.DeviceSchedule.id == schedule_id).delete()
